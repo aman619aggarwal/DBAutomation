@@ -118,8 +118,8 @@
 		"ServiceDLEmailID": {
 			"Description": "Service team DL for topic subscription",
 			"Type": "String",
-			"AllowedPattern": "[a-zA-Z-]+@adobe.com",
-			"ConstraintDescription": "Must be a valid adobe email id"
+			"AllowedPattern": "[a-zA-Z-]+.com",
+			"ConstraintDescription": "Must be a valid Email id"
 		},
 
 		"StorageThreshold": {
