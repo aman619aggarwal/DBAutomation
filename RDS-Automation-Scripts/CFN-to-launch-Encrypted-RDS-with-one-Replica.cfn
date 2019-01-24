@@ -1,0 +1,880 @@
+{
+	"AWSTemplateFormatVersion": "2010-09-09",
+
+	"Description": "Cloud Formation Template which is used for provisioning of MySQL database in RDS Instance",
+
+	"Parameters": {
+
+		"DbInstanceIdentifier": {
+			"Description": "A name for the Master RDS instance.",
+			"Type": "String",
+			"AllowedPattern": "^[0-9a-zA-Z-/]*$",
+			"MinLength": "1",
+			"ConstraintDescription": "Must only contain alpha numeric characters and must begin with alphabet"
+		},
+
+		"DbUser": {
+			"NoEcho": "true",
+			"Description": "The database admin account username",
+			"Type": "String",
+			"MinLength": "1",
+			"MaxLength": "16",
+			"AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
+			"ConstraintDescription": "must begin with a letter and contain only alphanumeric characters."
+		},
+
+		"DbPassword": {
+			"NoEcho": "true",
+			"Description": "The database admin account password",
+			"Type": "String",
+			"MinLength": "8",
+			"MaxLength": "41",
+			"ConstraintDescription": "Password should contain a minimum of 8 characters."
+		},
+
+		"DbPort": {
+			"Type": "Number",
+			"Description": "The port to which database will listen to",
+			"MinValue": 1024,
+			"MaxValue": 65535,
+			"Default": 3306,
+			"ConstraintDescription": "Port should be configured only from the available ports"
+		},
+
+		"DbInstanceClass": {
+			"Description": "The database instance type",
+			"Type": "String",
+			"Default": "db.t2.small",
+			"AllowedValues": [
+				"db.t1.micro",
+				"db.m1.small",
+				"db.m1.medium",
+				"db.m1.large",
+				"db.m1.xlarge",
+				"db.m2.xlarge",
+				"db.m2.2xlarge",
+				"db.m2.4xlarge",
+				"db.m3.medium",
+				"db.m3.large",
+				"db.m3.xlarge",
+				"db.m3.2xlarge",
+				"db.m4.large",
+				"db.m4.xlarge",
+				"db.m4.2xlarge",
+				"db.m4.4xlarge",
+				"db.m4.10xlarge",
+				"db.r3.large",
+				"db.r3.xlarge",
+				"db.r3.2xlarge",
+				"db.r3.4xlarge",
+				"db.r3.8xlarge",
+				"db.cr1.8xlarge",
+				"db.t2.micro",
+				"db.t2.small",
+				"db.t2.medium",
+				"db.t2.large"
+			],
+			"ConstraintDescription": "must select a valid database instance type."
+		},
+
+		"DbBackupRetentionPeriod": {
+			"Default": 14,
+			"Description": "The number of days during which automatic DB snapshots are retained.",
+			"Type": "Number",
+			"MinValue": 1,
+			"MaxValue" : 35,
+			"ConstraintDescription": "Must only contain numeric characters.. "
+		},
+
+		"CreateReadReplica" : {
+			"Description":"Yes if Read-Replica instance should be created for Master instance",
+			"AllowedValues" : ["yes", "no"],
+			"Default" : "yes",
+			"Type" : "String"
+		},
+		"EncryptionEnabled" : {
+			"Description":"True if Encryption enabled on RDS Instance",
+			"AllowedValues" : ["true", "false"],
+			"Default" : "true",
+			"Type" : "String"
+		},
+		"KmsKeyId" : {
+			"Description":"The ARN of the AWS Key Management Service (AWS KMS) master key that's used to encrypt the DB instance",
+			"Default" : "",
+			"Type" : "String"
+		},
+		"VPCId": {
+			"Description": "The id which uniquely identifies the VPC. ",
+			"Type": "String",
+			"AllowedPattern": "^vpc-[a-z0-9]*$",
+			"ConstraintDescription": "Must be id of the existing VPC"
+		},
+
+		"DbSubnetGroups" : {
+			"Description": "List of Subnet groups that can access the rds instance",
+			"Type": "CommaDelimitedList"
+		},
+
+		"ServiceDLEmailID": {
+			"Description": "Service team DL for topic subscription",
+			"Type": "String",
+			"AllowedPattern": "[a-zA-Z-]+@adobe.com",
+			"ConstraintDescription": "Must be a valid adobe email id"
+		},
+
+		"StorageThreshold": {
+			"Description": "Threshold value for the Storage in Rds",
+			"Type": "Number",
+			"Default": 20000000000
+		},
+
+		"MemoryUtilizationThreshold": {
+			"Description": "Threshold value for the Memory Utilization in RDS",
+			"Type": "Number",
+            "Default": 3200000000
+		},
+
+		"WriteIopsThreshold": {
+			"Description": "Threshold value for the Write IOPS in the RDS",
+			"Type": "Number",
+			"Default": 400
+		},
+
+		"ReadIopsThreshold": {
+			"Description": "Threshold value for the Read IOPS in the RDS",
+			"Type": "Number",
+			"Default": 600
+		},
+
+		"DbConnectionsThreshold": {
+			"Description": "Threshold value for the number of Connections to the Db Instance",
+			"Type": "Number",
+			"Default": 900
+		},
+
+		"DbIops": {
+			"Description": "The number of I/O operations per second (IOPS) that the database provisions.",
+			"Type": "Number",
+			"Default": 1000,
+			"MinValue": 1000,
+			"MaxValue": 30000,
+			"ConstraintDescription": "The value must be equal to or greater than 1000."
+		},
+
+		"DbAllocatedStorage": {
+			"Description": "Allocated storage for the DBInstance in GB.",
+			"Type": "Number",
+			"Default": 100
+		},
+
+		"DbPreferredMaintenanceWindow": {
+			"Default": "sun:02:00-sun:03:00",
+			"Description": "Preferred window for Maintenance",
+			"Type": "String",
+			"AllowedPattern": "^(sun|mon|tue|wed|thu|fri|sat):([0-9]|0[0-9]|1[0-9]|2[0-3]):[0-5][0-9]-(sun|mon|tue|wed|thu|fri|sat):([0-9]|0[0-9]|1[0-9]|2[0-3]):[0-5][0-9]$",
+			"ConstraintDescription": "ddd:hh24:mi-ddd:hh24:mi is the format for time window"
+		},
+
+		"DbPreferredBackupWindow": {
+			"Default": "10:00-12:00",
+			"Description": "Preferred window for daily backups",
+			"Type": "String",
+			"AllowedPattern": "^([0-9]|0[0-9]|1[0-9]|2[0-3]):[0-5][0-9]-([0-9]|0[0-9]|1[0-9]|2[0-3]):[0-5][0-9]$",
+			"ConstraintDescription": "hh24:mi-hh24:mi is the format for time window"
+		},
+
+		"BastionHostSecurityGroup": {
+			"Description": "Security group of bastion host",
+			"Type": "String",
+			"AllowedPattern": "^sg-[a-z0-9]{8}$",
+			"ConstraintDescription": "Should be a valid sg group"
+		},
+
+		"EthosCIDR": {
+			"Description": "CIDR block for Ethos VPC",
+			"Type": "String",
+			"Default": ""
+		}
+	},
+
+	"Conditions": {
+		"CreateReadReplica" :  {"Fn::Equals" : [{"Ref" : "CreateReadReplica"}, "yes"]},
+		"EncryptionEnabled" :  {"Fn::Equals" : [{"Ref" : "EncryptionEnabled"}, "true"]},
+		"AllowEthosVPCCidr" : {
+			"Fn::Not": [{"Fn::Equals": [{ "Ref": "EthosCIDR" }, ""]}]
+		}
+	},
+
+	"Resources": {
+		"MasterDatabase": {
+			"Type": "AWS::RDS::DBInstance",
+			"Properties": {
+				"StorageType": "io1",
+				"AllocatedStorage": { "Ref": "DbAllocatedStorage" },
+				"Iops" : { "Ref" : "DbIops" },
+				"PubliclyAccessible": false,
+				"AutoMinorVersionUpgrade": false,
+				"DBInstanceClass": { "Ref": "DbInstanceClass" },
+				"StorageEncrypted" : { "Ref": "EncryptionEnabled"},
+
+				"DBInstanceIdentifier": { "Ref": "DbInstanceIdentifier" },
+				"MultiAZ": true,
+
+				"Engine": "MySQL",
+
+				"KmsKeyId" : { "Ref": "KmsKeyId" },
+
+				"EngineVersion": "5.7.23",
+				"MasterUsername": { "Ref": "DbUser" },
+				"MasterUserPassword": { "Ref": "DbPassword" },
+
+				"BackupRetentionPeriod": { "Ref": "DbBackupRetentionPeriod" },
+
+				"OptionGroupName" : { "Ref" : "MySQLOptionGroup" },
+
+				"DBParameterGroupName": { "Ref": "MasterDBParameterGroup" },
+
+				"VPCSecurityGroups": [{
+					"Ref": "MasterDBSecurityGroup"
+				}],
+
+				"PreferredBackupWindow" : { "Ref": "DbPreferredBackupWindow" },
+				"PreferredMaintenanceWindow": { "Ref": "DbPreferredMaintenanceWindow" },
+                "DBSubnetGroupName": { "Ref": "DBSubnetGroup" }
+			}
+		},
+
+		"ReplicaDatabase": {
+			"Condition" : "CreateReadReplica",
+			"Type": "AWS::RDS::DBInstance",
+			"Properties": {
+
+				"SourceDBInstanceIdentifier": { "Ref": "MasterDatabase" },
+
+				"DBInstanceClass": { "Ref": "DbInstanceClass" },
+
+				"StorageEncrypted" : { "Ref": "EncryptionEnabled"},
+
+				"DBInstanceIdentifier": {"Fn::Join" : [ "-", [ {"Ref": "DbInstanceIdentifier"}, "ReadReplica"] ]},
+
+				"MultiAZ": false,
+
+				"KmsKeyId" : { "Ref": "KmsKeyId" },
+
+				"AutoMinorVersionUpgrade": false,
+
+				"PubliclyAccessible": false,
+
+				"StorageType": "io1",
+
+				"AllocatedStorage": { "Ref": "DbAllocatedStorage" },
+
+				"Iops" : { "Ref" : "DbIops" },
+
+				"OptionGroupName" : { "Ref" : "MySQLOptionGroup" },
+
+				"DBParameterGroupName": { "Ref": "ReplicaDBParameterGroup" },
+
+				"VPCSecurityGroups": [{
+					"Ref": "ReplicaDBSecurityGroup"
+				}]
+			}
+		},
+
+		"MasterDBParameterGroup": {
+			"Type": "AWS::RDS::DBParameterGroup",
+
+			"Properties": {
+				"Family": "MySQL5.7",
+
+				"Description": "Database parameter group for Master database",
+
+				"Parameters": {
+					"max_user_connections": "{DBInstanceClassMemory/13245136}",
+					"long_query_time": "1",
+					"slow_query_log": "1"
+				}
+			}
+		},
+
+		"ReplicaDBParameterGroup": {
+			"Condition" : "CreateReadReplica",
+			"Type": "AWS::RDS::DBParameterGroup",
+			"Properties": {
+				"Family": "MySQL5.7",
+				"Description": "Database parameter group for Replica database",
+				"Parameters": {
+					"innodb_flush_log_at_trx_commit": "0",
+					"sync_binlog": "0"
+				}
+			}
+		},
+
+		"BastionHostSecurityIngress": {
+			"Type": "AWS::EC2::SecurityGroupIngress",
+			"Properties": {
+				"GroupId": {
+					"Ref": "MasterDBSecurityGroup"
+				},
+				"IpProtocol": "tcp",
+				"FromPort": {
+					"Ref": "DbPort"
+				},
+				"ToPort": {
+					"Ref": "DbPort"
+				},
+				"SourceSecurityGroupId": {
+					"Ref": "BastionHostSecurityGroup"
+				}
+			}
+		},
+
+		"EthosVPCSecurityIngress": {
+			"Condition" : "AllowEthosVPCCidr",
+			"Type": "AWS::EC2::SecurityGroupIngress",
+			"Properties": {
+				"GroupId": {
+					"Ref": "MasterDBSecurityGroup"
+				},
+				"IpProtocol": "tcp",
+				"FromPort": {
+					"Ref": "DbPort"
+				},
+				"ToPort": {
+					"Ref": "DbPort"
+				},
+				"CidrIp": {
+					"Ref": "EthosCIDR"
+				}
+			}
+		},
+
+		"BastionHostSecurityIngressForReadReplica": {
+			"Condition" : "CreateReadReplica",
+			"Type": "AWS::EC2::SecurityGroupIngress",
+			"Properties": {
+				"GroupId": {
+					"Ref": "ReplicaDBSecurityGroup"
+				},
+				"IpProtocol": "tcp",
+				"FromPort": {
+					"Ref": "DbPort"
+				},
+				"ToPort": {
+					"Ref": "DbPort"
+				},
+				"SourceSecurityGroupId": {
+					"Ref": "BastionHostSecurityGroup"
+				}
+			}
+		},
+
+		"MasterDBSecurityGroup": {
+			"Type": "AWS::EC2::SecurityGroup",
+			"Properties": {
+				"GroupDescription": "Allow http and ssh to client host",
+				"VpcId": {
+					"Ref": "VPCId"
+				},
+				"SecurityGroupIngress": []
+			}
+		},
+
+		"ReplicaDBSecurityGroup": {
+			"Condition" : "CreateReadReplica",
+			"Type": "AWS::EC2::SecurityGroup",
+			"Properties": {
+				"GroupDescription": "Allow http and ssh to client host",
+				"VpcId": {
+					"Ref": "VPCId"
+				},
+				"SecurityGroupIngress": []
+			}
+		},
+
+		"EthosVPCSecurityIngressForReplica": {
+			"Condition" : "CreateReadReplica",
+			"Type": "AWS::EC2::SecurityGroupIngress",
+			"Properties": {
+				"GroupId": {
+					"Ref": "ReplicaDBSecurityGroup"
+				},
+				"IpProtocol": "tcp",
+				"FromPort": {
+					"Ref": "DbPort"
+				},
+				"ToPort": {
+					"Ref": "DbPort"
+				},
+				"CidrIp": {
+					"Ref": "EthosCIDR"
+				}
+			}
+		},
+
+		"DBSubnetGroup": {
+			"Type": "AWS::RDS::DBSubnetGroup",
+			"Properties": {
+				"DBSubnetGroupDescription": "Group of subnets that can access the rds instance",
+				"SubnetIds": {"Ref": "DbSubnetGroups"}
+			}
+		},
+
+		"SNSTopic": {
+			"Type": "AWS::SNS::Topic",
+			"Properties": {
+				"Subscription": [
+					{
+						"Endpoint": {"Ref": "ServiceDLEmailID"},
+						"Protocol": "email"
+					}
+				]
+			}
+		},
+
+		"DBConnectionsAlarm": {
+			"Type": "AWS::CloudWatch::Alarm",
+			"Properties": {
+				"ActionsEnabled": "true",
+				"AlarmDescription": "RDS Number of concurrent connections alarm",
+				"AlarmName": {"Fn::Join" : [ "-", [ {"Ref": "DbInstanceIdentifier"}, "DB", "DbConnectionsAlarm"] ]},
+				"ComparisonOperator": "GreaterThanOrEqualToThreshold",
+				"EvaluationPeriods": "1",
+				"MetricName": "DatabaseConnections",
+				"Namespace": "AWS/RDS",
+				"Period": "300",
+				"Statistic": "Average",
+				"Threshold": {
+					"Ref": "DbConnectionsThreshold"
+				},
+				"AlarmActions": [
+					{ "Ref" : "SNSTopic"}
+				],
+				"OKActions": [
+					{ "Ref": "SNSTopic"}
+				],
+				"InsufficientDataActions": [
+					{ "Ref": "SNSTopic" }
+				],
+				"Dimensions": [
+					{
+						"Name": "DBInstanceIdentifier",
+						"Value": {"Ref": "MasterDatabase"}
+					}
+				]
+			}
+		},
+
+		"ReplicaDBConnectionsAlarm": {
+			"Type": "AWS::CloudWatch::Alarm",
+			"Condition" : "CreateReadReplica",
+			"Properties": {
+				"ActionsEnabled": "true",
+				"AlarmDescription": "RDS - Number of concurrent connections alarm for Replica DB",
+				"AlarmName": {"Fn::Join" : [ "-", [{"Ref": "DbInstanceIdentifier"}, "ReplicaDB", "DbConnectionsAlarm"] ]},
+				"ComparisonOperator": "GreaterThanOrEqualToThreshold",
+				"EvaluationPeriods": "1",
+				"MetricName": "DatabaseConnections",
+				"Namespace": "AWS/RDS",
+				"Period": "300",
+				"Statistic": "Average",
+				"Threshold": {
+					"Ref": "DbConnectionsThreshold"
+				},
+				"AlarmActions": [
+					{ "Ref" : "SNSTopic"}
+				],
+				"OKActions": [
+					{ "Ref": "SNSTopic"}
+				],
+				"InsufficientDataActions": [
+					{ "Ref": "SNSTopic" }
+				],
+				"Dimensions": [
+					{
+						"Name": "DBInstanceIdentifier",
+						"Value": {"Ref": "ReplicaDatabase"}
+					}
+				]
+			}
+		},
+
+		"CPUUtilizationAlarm": {
+			"Type": "AWS::CloudWatch::Alarm",
+			"Properties": {
+				"ActionsEnabled": "true",
+				"AlarmDescription": "RDS CPU Utilization alarm.. Threshold as 80%",
+				"AlarmName": {"Fn::Join" : [ "-", [ {"Ref": "DbInstanceIdentifier"}, "DB", "CPUUtilizationAlarm"] ]},
+				"ComparisonOperator": "GreaterThanOrEqualToThreshold",
+				"EvaluationPeriods": "1",
+				"MetricName": "CPUUtilization",
+				"Namespace": "AWS/RDS",
+				"Period": "300",
+				"Statistic": "Average",
+				"Threshold": "80.0",
+				"AlarmActions": [
+					{ "Ref" : "SNSTopic"}
+				],
+				"OKActions": [
+					{ "Ref": "SNSTopic"}
+				],
+				"InsufficientDataActions": [
+					{ "Ref": "SNSTopic" }
+				],
+				"Dimensions": [
+					{
+						"Name": "DBInstanceIdentifier",
+						"Value": {"Ref": "MasterDatabase"}
+					}
+				]
+			}
+		},
+
+		"ReadReplicaCPUUtilizationAlarm": {
+			"Type": "AWS::CloudWatch::Alarm",
+			"Condition" : "CreateReadReplica",
+			"Properties": {
+				"ActionsEnabled": "true",
+				"AlarmDescription": "ReadReplica RDS CPU Utilization alarm.. Threshold as 80%",
+				"AlarmName": {"Fn::Join" : [ "-", [ {"Ref": "DbInstanceIdentifier"}, "ReadReplicaDB", "CPUUtilizationAlarm"] ]},
+				"ComparisonOperator": "GreaterThanOrEqualToThreshold",
+				"EvaluationPeriods": "1",
+				"MetricName": "CPUUtilization",
+				"Namespace": "AWS/RDS",
+				"Period": "300",
+				"Statistic": "Average",
+				"Threshold": "80.0",
+				"AlarmActions": [
+					{ "Ref" : "SNSTopic"}
+				],
+				"OKActions": [
+					{ "Ref": "SNSTopic"}
+				],
+				"InsufficientDataActions": [
+					{ "Ref": "SNSTopic" }
+				],
+				"Dimensions": [
+					{
+						"Name": "DBInstanceIdentifier",
+						"Value": {"Ref": "ReplicaDatabase"}
+					}
+				]
+			}
+		},
+
+		"MemoryUtilizationAlarm": {
+			"Type": "AWS::CloudWatch::Alarm",
+			"Properties": {
+				"ActionsEnabled": "true",
+				"AlarmDescription": "RDS Free Memory over period of 5 minutes",
+				"AlarmName": {"Fn::Join" : [ "-", [ {"Ref": "DbInstanceIdentifier"}, "DB", "MemoryUtilizationAlarm"] ]},
+				"ComparisonOperator": "LessThanOrEqualToThreshold",
+				"EvaluationPeriods": "1",
+				"MetricName": "FreeableMemory",
+				"Namespace": "AWS/RDS",
+				"Period": "300",
+				"Statistic": "Average",
+				"Threshold": {
+					"Ref": "MemoryUtilizationThreshold"
+				},
+				"AlarmActions": [
+					{ "Ref" : "SNSTopic"}
+				],
+				"OKActions": [
+					{ "Ref": "SNSTopic"}
+				],
+				"InsufficientDataActions": [
+					{ "Ref": "SNSTopic" }
+				],
+				"Dimensions": [
+					{
+						"Name": "DBInstanceIdentifier",
+						"Value": {"Ref": "MasterDatabase"}
+					}
+				]
+			}
+		},
+
+		"ReplicaDBMemoryUtilizationAlarm": {
+			"Type": "AWS::CloudWatch::Alarm",
+			"Condition" : "CreateReadReplica",
+			"Properties": {
+				"ActionsEnabled": "true",
+				"AlarmDescription": "RDS Replica DB Free Memory over period of 5 minutes",
+				"AlarmName": {"Fn::Join" : [ "-", [ {"Ref": "DbInstanceIdentifier"}, "ReplicaDB", "MemoryUtilizationAlarm"] ]},
+				"ComparisonOperator": "LessThanOrEqualToThreshold",
+				"EvaluationPeriods": "1",
+				"MetricName": "FreeableMemory",
+				"Namespace": "AWS/RDS",
+				"Period": "300",
+				"Statistic": "Average",
+				"Threshold": {
+					"Ref": "MemoryUtilizationThreshold"
+				},
+				"AlarmActions": [
+					{ "Ref" : "SNSTopic"}
+				],
+				"OKActions": [
+					{ "Ref": "SNSTopic"}
+				],
+				"InsufficientDataActions": [
+					{ "Ref": "SNSTopic" }
+				],
+				"Dimensions": [
+					{
+						"Name": "DBInstanceIdentifier",
+						"Value": {"Ref": "ReplicaDatabase"}
+					}
+				]
+			}
+		},
+
+		"StorageAlarm": {
+			"Type": "AWS::CloudWatch::Alarm",
+			"Properties": {
+				"ActionsEnabled": "true",
+				"AlarmDescription": "Storage Space Alarm",
+				"AlarmName": {"Fn::Join" : [ "-", [ {"Ref": "DbInstanceIdentifier"}, "DB", "StorageAlarm"] ]},
+				"ComparisonOperator": "LessThanOrEqualToThreshold",
+				"EvaluationPeriods": "1",
+				"MetricName": "FreeStorageSpace",
+				"Namespace": "AWS/RDS",
+				"Period": "300",
+				"Statistic": "Average",
+				"Threshold": {
+					"Ref": "StorageThreshold"
+				},
+				"AlarmActions": [
+					{ "Ref" : "SNSTopic"}
+				],
+				"OKActions": [
+					{ "Ref": "SNSTopic"}
+				],
+				"InsufficientDataActions": [
+					{ "Ref": "SNSTopic" }
+				],
+				"Dimensions": [
+					{
+						"Name": "DBInstanceIdentifier",
+						"Value": {"Ref": "MasterDatabase"}
+					}
+				]
+			}
+		},
+
+		"ReadReplicaAlarm": {
+			"Condition" : "CreateReadReplica",
+			"Type": "AWS::CloudWatch::Alarm",
+			"Properties": {
+				"ActionsEnabled": "true",
+				"AlarmDescription": "RDS Replica lag should not be more than 60 seconds",
+				"AlarmName": {"Fn::Join" : [ "-", [ {"Ref": "DbInstanceIdentifier"}, "DB", "ReadReplicaAlarm"] ]},
+				"ComparisonOperator": "GreaterThanOrEqualToThreshold",
+				"EvaluationPeriods": "1",
+				"MetricName": "ReplicaLag",
+				"Namespace": "AWS/RDS",
+				"Period": "300",
+				"Statistic": "Average",
+				"Threshold": "60.0",
+				"AlarmActions": [
+					{ "Ref" : "SNSTopic"}
+				],
+				"OKActions": [
+					{ "Ref": "SNSTopic"}
+				],
+				"InsufficientDataActions": [
+					{ "Ref": "SNSTopic" }
+				],
+				"Dimensions": [
+					{
+						"Name": "DBInstanceIdentifier",
+						"Value": {"Ref": "ReplicaDatabase"}
+					}
+				]
+			}
+		},
+
+		"WriteIOPSAlarm": {
+			"Type": "AWS::CloudWatch::Alarm",
+			"Properties": {
+				"ActionsEnabled": "true",
+				"AlarmDescription": "Write IOPS alarm",
+				"AlarmName": {"Fn::Join" : [ "-", [ {"Ref": "DbInstanceIdentifier"}, "DB", "WriteIOPSAlarm"] ]},
+				"ComparisonOperator": "GreaterThanOrEqualToThreshold",
+				"EvaluationPeriods": "1",
+				"MetricName": "WriteIOPS",
+				"Namespace": "AWS/RDS",
+				"Period": "300",
+				"Statistic": "Average",
+				"Threshold": {
+					"Ref": "WriteIopsThreshold"
+				},
+				"AlarmActions": [
+					{ "Ref" : "SNSTopic"}
+				],
+				"OKActions": [
+					{ "Ref": "SNSTopic"}
+				],
+				"InsufficientDataActions": [
+					{ "Ref": "SNSTopic" }
+				],
+				"Dimensions": [
+					{
+						"Name": "DBInstanceIdentifier",
+						"Value": {"Ref": "MasterDatabase"}
+					}
+				]
+			}
+		},
+
+		"ReadIOPSAlarm": {
+			"Type": "AWS::CloudWatch::Alarm",
+			"Properties": {
+				"ActionsEnabled": "true",
+				"AlarmDescription": "Read IOPS alarm",
+				"AlarmName": {"Fn::Join" : [ "-", [ {"Ref": "DbInstanceIdentifier"}, "DB", "ReadIOPSAlarm"] ]},
+				"ComparisonOperator": "GreaterThanOrEqualToThreshold",
+				"EvaluationPeriods": "1",
+				"MetricName": "ReadIOPS",
+				"Namespace": "AWS/RDS",
+				"Period": "300",
+				"Statistic": "Average",
+				"Threshold": {
+					"Ref": "ReadIopsThreshold"
+				},
+				"AlarmActions": [
+					{ "Ref" : "SNSTopic"}
+				],
+				"OKActions": [
+					{ "Ref": "SNSTopic"}
+				],
+				"InsufficientDataActions": [
+					{ "Ref": "SNSTopic" }
+				],
+				"Dimensions": [
+					{
+						"Name": "DBInstanceIdentifier",
+						"Value": {"Ref": "MasterDatabase"}
+					}
+				]
+			}
+		},
+
+		"ReadReplicaReadIOPSAlarm": {
+			"Type": "AWS::CloudWatch::Alarm",
+			"Condition": "CreateReadReplica",
+			"Properties": {
+				"ActionsEnabled": "true",
+				"AlarmDescription": "Read IOPS alarm for ReadReplica DB",
+				"AlarmName": {"Fn::Join" : [ "-", [ {"Ref": "DbInstanceIdentifier"}, "ReplicaDB", "ReadIOPSAlarm"] ]},
+				"ComparisonOperator": "GreaterThanOrEqualToThreshold",
+				"EvaluationPeriods": "1",
+				"MetricName": "ReadIOPS",
+				"Namespace": "AWS/RDS",
+				"Period": "300",
+				"Statistic": "Average",
+				"Threshold": {
+					"Ref": "ReadIopsThreshold"
+				},
+				"AlarmActions": [
+					{ "Ref" : "SNSTopic"}
+				],
+				"OKActions": [
+					{ "Ref": "SNSTopic"}
+				],
+				"InsufficientDataActions": [
+					{ "Ref": "SNSTopic" }
+				],
+				"Dimensions": [
+					{
+						"Name": "DBInstanceIdentifier",
+						"Value": {"Ref": "ReplicaDatabase"}
+					}
+				]
+			}
+		},
+
+		"MySQLOptionGroup": {
+			"Type": "AWS::RDS::OptionGroup",
+			"Properties": {
+				"EngineName": "MySQL",
+				"MajorEngineVersion": "5.7",
+				"OptionGroupDescription" : "MySQL 5.7 Options group",
+				"OptionConfigurations": []
+			}
+		},
+
+		"MySQLEventsSubscription": {
+			"Type": "AWS::RDS::EventSubscription",
+			"Properties": {
+				"SourceIds": [
+					{"Ref" : "MasterDatabase"}
+				],
+				"SourceType": "db-instance",
+				"SnsTopicArn": {
+					"Ref": "SNSTopic"
+				},
+				"Enabled": true,
+				"EventCategories": [
+					"availability",
+					"configuration change",
+					"creation",
+					"deletion",
+					"failure",
+					"failover",
+					"maintenance",
+					"notification",
+					"read replica",
+					"recovery"
+				]
+			}
+		},
+
+		"ReadReplicaMySQLEventsSubscription": {
+			"Type": "AWS::RDS::EventSubscription",
+			"Condition": "CreateReadReplica",
+			"Properties": {
+				"SourceIds": [
+					{"Ref" : "ReplicaDatabase"}
+				],
+				"SourceType": "db-instance",
+				"SnsTopicArn": {
+					"Ref": "SNSTopic"
+				},
+				"Enabled": true,
+				"EventCategories": [
+					"availability",
+					"configuration change",
+					"creation",
+					"deletion",
+					"failure",
+					"failover",
+					"maintenance",
+					"notification",
+					"read replica",
+					"recovery"
+				]
+			}
+		}
+	},
+
+	"Outputs": {
+		"MasterDatabaseEndpoint": {
+			"Description" : "JDBC connection string for the master database",
+			"Value" : { "Fn::Join": [ "", [ "jdbc:mysql://",
+				{ "Fn::GetAtt": [ "MasterDatabase", "Endpoint.Address" ] },
+				":",
+				{ "Fn::GetAtt": [ "MasterDatabase", "Endpoint.Port" ] }
+				]]}
+		},
+		"ReadReplicaEndpoint": {
+			"Condition" : "CreateReadReplica",
+			"Description" : "JDBC connection string for the replica database",
+			"Value" : { "Fn::Join": [ "", [ "jdbc:mysql://",
+				{ "Fn::GetAtt": [ "ReplicaDatabase", "Endpoint.Address" ] },
+				":",
+				{ "Fn::GetAtt": [ "ReplicaDatabase", "Endpoint.Port" ] }
+				]]}
+		}
+	}
+}
